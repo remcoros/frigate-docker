@@ -28,7 +28,7 @@ RUN \
   gpg --status-fd 1 --verify frigate-${FRIGATE_VERSION}-manifest.txt.asc | grep -q "GOODSIG ${FRIGATE_PGP_SIG} Craig Raw <craig@sparrowwallet.com>" || exit 1 && \
   sha256sum --check frigate-${FRIGATE_VERSION}-manifest.txt --ignore-missing || exit 1 && \
   DEBIAN_FRONTEND=noninteractive \
-  apt-get install -y ./frigate_${FRIGATE_VERSION}_amd64.deb && \
+  apt-get install -y ./frigate_${FRIGATE_VERSION}_${ARCH}.deb && \
   # cleanup
   rm ./frigate* ./pgp_keys.asc
 

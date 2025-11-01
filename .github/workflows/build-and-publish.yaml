@@ -1,0 +1,145 @@
+name: Build and Publish Docker Image (Multi-Arch)
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore: ['*.md']
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            dockerfile: Dockerfile
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Prep: lowercase owner and strip leading "v" from tag names
+      - name: Compute image vars
+        id: vars
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build and push by digest only (no per-arch tags). We upload the digest as an artifact per-arch.
+      - name: Build and push by digest - ${{ matrix.arch }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          # Reuse and populate BuildKit cache to speed up subsequent builds
+          cache-from: type=gha,scope=frigate-docker-${{ matrix.arch }}
+          cache-to: type=gha,scope=frigate-docker-${{ matrix.arch }},mode=max
+          provenance: false
+          sbom: false
+          # Push to registry by digest only (no tags)
+          outputs: type=registry,push-by-digest=true,name=ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker
+
+      - name: Write digest file
+        run: |
+          echo "${{ steps.build.outputs.digest }}" > digest-${{ matrix.arch }}.txt
+
+      - name: Upload digest artifact - ${{ matrix.arch }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digest-${{ matrix.arch }}.txt
+
+  manifest:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image vars
+        id: vars
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download digest (amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: digest-amd64
+          path: digests/amd64
+
+      - name: Download digest (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: digest-arm64
+          path: digests/arm64
+
+      - name: Read digests
+        id: digests
+        run: |
+          echo "amd64=$(cat digests/amd64/digest-amd64.txt)" >> "$GITHUB_OUTPUT"
+          echo "arm64=$(cat digests/arm64/digest-arm64.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push multi-arch manifest (main)
+        if: github.ref_type == 'branch' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker"
+          docker manifest create "$IMAGE:main" \
+            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
+          docker manifest push "$IMAGE:main"
+
+          docker manifest create "$IMAGE:${{ github.sha }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
+          docker manifest push "$IMAGE:${{ github.sha }}"
+
+      - name: Create and push multi-arch manifest (tag)
+        if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker"
+          VER="${{ steps.vars.outputs.version }}"
+          docker manifest create "$IMAGE:$VER" \
+            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
+          docker manifest push "$IMAGE:$VER"
+
+          docker manifest create "$IMAGE:latest" \
+            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
+          docker manifest push "$IMAGE:latest"
+
+          docker manifest create "$IMAGE:${{ github.sha }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
+            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
+          docker manifest push "$IMAGE:${{ github.sha }}"

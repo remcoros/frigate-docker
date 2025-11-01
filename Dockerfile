@@ -35,4 +35,4 @@ RUN \
 EXPOSE 57001
 VOLUME /root/.frigate
 
-ENTRYPOINT ["/opt/frigate/bin/frigate"]
+ENTRYPOINT ["/opt/frigate/bin/frigate", "-n", "mainnet"]

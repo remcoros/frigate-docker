@@ -19,10 +19,16 @@ The Dockerfile exposes port `57001` (Frigate electrum port). Map it to a host po
 Persistent data is stored in the container at `/root/.frigate` (declared as a volume). To persist across container recreations, mount a host directory.
 
 ```bash
-docker run -d --name frigate -p 57001:57001 -v /home/user/.frigate:/root/.frigate frigate:latest
+docker run -d --name frigate -p 57001:57001 -v /home/user/.frigate:/root/.frigate ghcr.io/remcoros/frigate-docker:main
 ```
 
 A configuration file `config` should be placed in the mounted volume directory. See the [frigate documentation](https://github.com/sparrowwallet/frigate) for details on configuration options.
+
+This uses 'mainnet' by default. If you want to run on testnet 4, run this:
+
+```bash
+docker run -d --name frigate -p 57001:57001 -v /home/user/.frigate:/root/.frigate ghcr.io/remcoros/frigate-docker:main --entrypoint "" /opt/frigate/bin/frigate -n testnet4
+```
 
 ## Licence
 

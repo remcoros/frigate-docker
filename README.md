@@ -27,7 +27,7 @@ A configuration file `config` should be placed in the mounted volume directory. 
 This uses 'mainnet' by default. If you want to run on testnet 4, run this:
 
 ```bash
-docker run -d --name frigate -p 57001:57001 -v /home/user/.frigate:/root/.frigate ghcr.io/remcoros/frigate-docker:main --entrypoint "" /opt/frigate/bin/frigate -n testnet4
+docker run -d --name frigate -p 57001:57001 -v /home/user/.frigate:/root/.frigate --entrypoint "" ghcr.io/remcoros/frigate-docker:main /opt/frigate/bin/frigate -n testnet4
 ```
 
 ## Licence

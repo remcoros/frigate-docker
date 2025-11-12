@@ -3,12 +3,17 @@
 FROM debian:bookworm-slim
 
 ARG TARGETPLATFORM
-ARG FRIGATE_VERSION=1.2.0
+ARG FRIGATE_VERSION=1.3.0
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 RUN \
   apt update && \
-  apt install -y --no-install-recommends ca-certificates gnupg wget
+  apt install -y --no-install-recommends ca-certificates gnupg wget && \
+  apt-get autoclean && \
+  rm -rf \
+    /var/lib/apt/lists/* \
+    /var/tmp/* \
+    /tmp/*
 
 # Install frigate
 RUN \

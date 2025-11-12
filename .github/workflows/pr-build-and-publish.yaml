@@ -21,7 +21,7 @@ jobs:
             runner: ubuntu-latest
           - arch: arm64
             platform: linux/arm64
-            dockerfile: Dockerfile.aarch64
+            dockerfile: Dockerfile
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout

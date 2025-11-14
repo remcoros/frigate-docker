@@ -1,9 +1,7 @@
-# taken from https://github.com/linuxserver/docker-baseimage-kasmvnc/blob/debianbookworm/Dockerfile
-# modified to apply 'novnc.patch' (fixing a disconnect/reconnect issue)
-FROM debian:bookworm-slim
+FROM debian:trixie-slim AS frigate
 
 ARG TARGETPLATFORM
-ARG FRIGATE_VERSION=1.3.0
+ARG FRIGATE_VERSION=1.3.1
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 RUN \
@@ -24,10 +22,10 @@ RUN \
   fi && \
   echo "**** install Frigate ****" && \
   # Download and install Frigate
-  wget  https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate_${FRIGATE_VERSION}_${ARCH}.deb \
-               https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt \
-               https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt.asc \
-               https://keybase.io/craigraw/pgp_keys.asc && \
+  wget https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate_${FRIGATE_VERSION}_${ARCH}.deb \
+       https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt \
+       https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt.asc \
+       https://keybase.io/craigraw/pgp_keys.asc && \
   # verify pgp and sha signatures
   gpg --import pgp_keys.asc && \
   gpg --status-fd 1 --verify frigate-${FRIGATE_VERSION}-manifest.txt.asc | grep -q "GOODSIG ${FRIGATE_PGP_SIG} Craig Raw <craig@sparrowwallet.com>" || exit 1 && \
@@ -37,7 +35,14 @@ RUN \
   # cleanup
   rm ./frigate* ./pgp_keys.asc
 
+FROM debian:trixie-slim
+
+COPY --from=frigate /opt/frigate /opt/frigate
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+ENV NETWORK=mainnet
+
 EXPOSE 57001
 VOLUME /root/.frigate
 
-ENTRYPOINT ["/opt/frigate/bin/frigate", "-n", "mainnet"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

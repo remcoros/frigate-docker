@@ -7,21 +7,19 @@
 services:
   frigate:
     image: ghcr.io/remcoros/frigate-docker:latest
-    container_name: frigate
     restart: unless-stopped
     ports:
       - "57001:57001"
     volumes:
       - /home/user/.frigate:/root/.frigate
 
-  # ── NVIDIA ──────────────────────────────────────────────────────────────────
+  # -- NVIDIA -----------------------------------------------------------------
   # Prerequisites:
   #   - NVIDIA driver 570.86.15+ on the host
   #   - nvidia-container-toolkit installed (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
   #
   frigate-nvidia:
     image: ghcr.io/remcoros/frigate-docker:latest
-    container_name: frigate
     restart: unless-stopped
     ports:
       - "57001:57001"
@@ -35,7 +33,7 @@ services:
               count: 1
               capabilities: [gpu]
 
-  # ── Intel iGPU (OpenCL) ─────────────────────────────────────────────────────
+  # -- Intel iGPU (OpenCL) ----------------------------------------------------
   # The Intel OpenCL runtime is bundled in the image.
   # Prerequisites:
   #   - User running the container must be in the 'render' group, or run as root
@@ -43,7 +41,6 @@ services:
   #
   frigate-intel:
     image: ghcr.io/remcoros/frigate-docker:latest
-    container_name: frigate
     restart: unless-stopped
     ports:
       - "57001:57001"
@@ -52,22 +49,17 @@ services:
     devices:
       - /dev/dri:/dev/dri
 
-  # ── AMD (OpenCL via ROCm) ───────────────────────────────────────────────────
+  # -- AMD (OpenCL via Mesa Rusticl) ------------------------------------------
   # Prerequisites:
-  #   - ROCm or AMDGPU-PRO OpenCL runtime installed on the host
-  #     (https://rocm.docs.amd.com/en/latest/deploy/linux/index.html)
-  #   - User running the container must be in the 'render' and 'video' groups
+  #   - Use the -amd image, which bundles Mesa Rusticl OpenCL
+  #   - User running the container must be in the 'render' group
   #
   frigate-amd:
-    image: ghcr.io/remcoros/frigate-docker:latest
-    container_name: frigate
+    image: ghcr.io/remcoros/frigate-docker:latest-amd
     restart: unless-stopped
     ports:
       - "57001:57001"
     volumes:
       - /home/user/.frigate:/root/.frigate
-      # Mount ROCm OpenCL runtime from host so the container can use it
-      - /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro
     devices:
       - /dev/dri:/dev/dri
-      - /dev/kfd:/dev/kfd

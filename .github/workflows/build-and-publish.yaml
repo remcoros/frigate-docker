@@ -4,33 +4,51 @@ on:
   workflow_dispatch:
   push:
     paths-ignore: ['*.md']
-    branches: [ main ]
-    tags: [ 'v*.*.*' ]
+    branches: [main]
+    tags: ['v*.*.*']
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Build each variant x arch, push by digest, upload digest as artifact.
+  #
+  # Variants:
+  #   default  - generic + nvidia + intel; built for amd64 + arm64 from Dockerfile
+  #              (Intel OpenCL runtime is included on amd64 only via if-check)
+  #   amd      - AMD GPU (Mesa Rusticl OpenCL); built for amd64 only from Dockerfile.amd
+  # ---------------------------------------------------------------------------
   build:
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          # default variant - amd64
+          - variant: default
+            arch: amd64
             platform: linux/amd64
             dockerfile: Dockerfile
             runner: ubuntu-latest
-          - arch: arm64
+          # default variant - arm64
+          - variant: default
+            arch: arm64
             platform: linux/arm64
             dockerfile: Dockerfile
             runner: ubuntu-24.04-arm
+          # amd variant - amd64 only
+          - variant: amd
+            arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile.amd
+            runner: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Prep: lowercase owner and strip leading "v" from tag names
       - name: Compute image vars
         id: vars
         run: |
@@ -47,32 +65,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build and push by digest only (no per-arch tags). We upload the digest as an artifact per-arch.
-      - name: Build and push by digest - ${{ matrix.arch }}
+      - name: Build and push by digest - ${{ matrix.variant }}/${{ matrix.arch }}
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
-          # Reuse and populate BuildKit cache to speed up subsequent builds
-          cache-from: type=gha,scope=frigate-docker-${{ matrix.arch }}
-          cache-to: type=gha,scope=frigate-docker-${{ matrix.arch }},mode=max
+          cache-from: type=gha,scope=frigate-docker-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=frigate-docker-${{ matrix.variant }}-${{ matrix.arch }},mode=max
           provenance: false
           sbom: false
-          # Push to registry by digest only (no tags)
           outputs: type=registry,push-by-digest=true,name=ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker
 
       - name: Write digest file
-        run: |
-          echo "${{ steps.build.outputs.digest }}" > digest-${{ matrix.arch }}.txt
+        run: echo "${{ steps.build.outputs.digest }}" > digest-${{ matrix.variant }}-${{ matrix.arch }}.txt
 
-      - name: Upload digest artifact - ${{ matrix.arch }}
+      - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
-          name: digest-${{ matrix.arch }}
-          path: digest-${{ matrix.arch }}.txt
+          name: digest-${{ matrix.variant }}-${{ matrix.arch }}
+          path: digest-${{ matrix.variant }}-${{ matrix.arch }}.txt
 
+  # ---------------------------------------------------------------------------
+  # Assemble multi-arch manifests from per-arch digests and push final tags.
+  #
+  # Tags produced on main branch push:
+  #   :main, :{sha}                          (default variant)
+  #   :main-amd, :{sha}-amd                  (amd variant)
+  #
+  # Tags produced on version tag (v*.*.*):
+  #   :{version}, :latest                    (default variant)
+  #   :{version}-amd, :latest-amd            (amd variant)
+  # ---------------------------------------------------------------------------
   manifest:
     runs-on: ubuntu-latest
     needs: build
@@ -90,56 +115,68 @@ jobs:
           echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Download digest (amd64)
-        uses: actions/download-artifact@v4
+      # Download all digest artifacts
+      - uses: actions/download-artifact@v4
         with:
-          name: digest-amd64
-          path: digests/amd64
-
-      - name: Download digest (arm64)
-        uses: actions/download-artifact@v4
+          name: digest-default-amd64
+          path: digests/default/amd64
+      - uses: actions/download-artifact@v4
         with:
-          name: digest-arm64
-          path: digests/arm64
+          name: digest-default-arm64
+          path: digests/default/arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-amd-amd64
+          path: digests/amd/amd64
 
       - name: Read digests
         id: digests
         run: |
-          echo "amd64=$(cat digests/amd64/digest-amd64.txt)" >> "$GITHUB_OUTPUT"
-          echo "arm64=$(cat digests/arm64/digest-arm64.txt)" >> "$GITHUB_OUTPUT"
+          echo "default_amd64=$(cat digests/default/amd64/digest-default-amd64.txt)" >> "$GITHUB_OUTPUT"
+          echo "default_arm64=$(cat digests/default/arm64/digest-default-arm64.txt)" >> "$GITHUB_OUTPUT"
+          echo "amd_amd64=$(cat digests/amd/amd64/digest-amd-amd64.txt)" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push multi-arch manifest (main)
+      # ---- main branch -------------------------------------------------------
+      - name: Push manifests (main branch)
         if: github.ref_type == 'branch' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker"
-          docker manifest create "$IMAGE:main" \
-            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
-          docker manifest push "$IMAGE:main"
 
-          docker manifest create "$IMAGE:${{ github.sha }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
-          docker manifest push "$IMAGE:${{ github.sha }}"
+          # default variant
+          for TAG in main "${{ github.sha }}"; do
+            docker manifest create "$IMAGE:$TAG" \
+              --amend "$IMAGE@${{ steps.digests.outputs.default_amd64 }}" \
+              --amend "$IMAGE@${{ steps.digests.outputs.default_arm64 }}"
+            docker manifest push "$IMAGE:$TAG"
+          done
 
-      - name: Create and push multi-arch manifest (tag)
+          # amd variant
+          for TAG in main-amd "${{ github.sha }}-amd"; do
+            docker manifest create "$IMAGE:$TAG" \
+              --amend "$IMAGE@${{ steps.digests.outputs.amd_amd64 }}"
+            docker manifest push "$IMAGE:$TAG"
+          done
+
+      # ---- version tag -------------------------------------------------------
+      - name: Push manifests (version tag)
         if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker"
           VER="${{ steps.vars.outputs.version }}"
-          docker manifest create "$IMAGE:$VER" \
-            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
-          docker manifest push "$IMAGE:$VER"
 
-          docker manifest create "$IMAGE:latest" \
-            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
-          docker manifest push "$IMAGE:latest"
+          # default variant
+          for TAG in "$VER" latest "${{ github.sha }}"; do
+            docker manifest create "$IMAGE:$TAG" \
+              --amend "$IMAGE@${{ steps.digests.outputs.default_amd64 }}" \
+              --amend "$IMAGE@${{ steps.digests.outputs.default_arm64 }}"
+            docker manifest push "$IMAGE:$TAG"
+          done
 
-          docker manifest create "$IMAGE:${{ github.sha }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.amd64 }}" \
-            --amend "$IMAGE@${{ steps.digests.outputs.arm64 }}"
-          docker manifest push "$IMAGE:${{ github.sha }}"
+          # amd variant
+          for TAG in "$VER-amd" latest-amd; do
+            docker manifest create "$IMAGE:$TAG" \
+              --amend "$IMAGE@${{ steps.digests.outputs.amd_amd64 }}"
+            docker manifest push "$IMAGE:$TAG"
+          done

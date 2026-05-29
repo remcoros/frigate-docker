@@ -37,24 +37,22 @@ RUN \
 
 FROM debian:trixie-slim
 
-# OpenCL support for GPU-accelerated Silent Payments scanning.
-# - ocl-icd-libopencl1: OpenCL ICD loader (dispatches to vendor runtimes)
+# Default / NVIDIA / Intel variant - built for amd64 and arm64.
+#
+# GPU support:
 # - Intel OpenCL runtime installed from upstream compute-runtime releases
-#   (intel-opencl-icd is not in Debian trixie repos)
-# NVIDIA: no packages needed — Frigate bundles its own CUDA extension and
-#         the NVIDIA container runtime injects driver libraries at launch time.
-# AMD:    ROCm is too large to bundle; mount host runtime via /etc/OpenCL/vendors.
+#   (intel-opencl-icd is not in Debian trixie repos); x86_64 only.
+# - NVIDIA: no packages needed - Frigate bundles its own CUDA extension and
+#   the NVIDIA container runtime injects driver libraries at launch time.
+# - AMD: use the separate Dockerfile.amd image with Mesa Rusticl/radeonsi.
 ARG TARGETPLATFORM
 ARG INTEL_COMPUTE_RUNTIME_VERSION=26.18.38308.1
 ARG INTEL_IGC_VERSION=2.34.4+21428
 ARG INTEL_IGC_VERSION_SHORT=2.34.4
 
-# GPU acceleration support (x86_64 only).
-# Intel OpenCL runtime is installed from upstream compute-runtime releases
-# (intel-opencl-icd is not in Debian trixie repos).
-# NVIDIA: no packages needed — Frigate bundles its own CUDA extension and
-#         the NVIDIA container runtime injects driver libraries at launch time.
-# AMD:    ROCm is too large to bundle; mount host runtime via /etc/OpenCL/vendors.
+# Intel OpenCL runtime is installed on x86_64 only.
+# A single compute-runtime package covers both i915 (Gen12 and older) and
+# xe (Arc/Xe, Meteor Lake+, kernel >= 6.8) - no separate image needed per driver.
 RUN if [ "${TARGETPLATFORM}" = "linux/amd64" ] ; then \
   apt update && \
   apt install -y --no-install-recommends \

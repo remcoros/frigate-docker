@@ -39,15 +39,20 @@ docker run -d --name frigate \
 
 ## GPU Acceleration
 
-Frigate 1.5.0+ supports GPU-accelerated Silent Payments scanning via CUDA (NVIDIA), OpenCL (Intel/AMD), and Metal (Apple). The image includes the Intel OpenCL runtime (installed from [intel/compute-runtime](https://github.com/intel/compute-runtime)) and the OpenCL ICD loader (`ocl-icd-libopencl1`). CUDA support requires no additional packages — Frigate bundles its own extension. AMD requires the ROCm runtime on the host.
+Frigate 1.5.0+ supports GPU-accelerated Silent Payments scanning via CUDA (NVIDIA), OpenCL (Intel/AMD), and Metal (Apple).
 
 Set `computeBackend = "AUTO"` (default) in `config.toml` to auto-detect the best available backend, or `"GPU"` / `"CPU"` to force one.
 
-See `docker-compose.gpu.yml` for ready-to-use examples for each GPU vendor.
+Two image variants are published:
+
+| Tag suffix | GPU support | Architectures |
+|---|---|---|
+| _(none)_ / `latest` | CPU, NVIDIA, Intel OpenCL | amd64 + arm64 |
+| `-amd` | CPU + AMD OpenCL via Mesa Rusticl/radeonsi | amd64 only |
 
 ### NVIDIA
 
-Requires NVIDIA driver 570.86.15+ and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on the host.
+Use the default image. Requires NVIDIA driver 570.86.15+ and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on the host.
 
 ```bash
 docker run -d --name frigate \
@@ -57,9 +62,11 @@ docker run -d --name frigate \
     ghcr.io/remcoros/frigate-docker:latest
 ```
 
-### Intel iGPU (OpenCL)
+### Intel iGPU / dGPU (OpenCL)
 
-The Intel OpenCL runtime is bundled in the image. Pass through `/dev/dri` and ensure the user running the container is in the `render` group (`sudo usermod -aG render $USER`).
+Use the default image. The Intel OpenCL runtime ([intel-compute-runtime](https://github.com/intel/compute-runtime)) is bundled on amd64. A single package covers both i915 (Gen12 and older: Tiger Lake, Alder Lake, Raptor Lake) and xe (Arc, Meteor Lake+, kernel >= 6.8).
+
+Pass through `/dev/dri` and ensure the user running the container is in the `render` group (`sudo usermod -aG render $USER`).
 
 ```bash
 docker run -d --name frigate \
@@ -69,18 +76,16 @@ docker run -d --name frigate \
     ghcr.io/remcoros/frigate-docker:latest
 ```
 
-### AMD (OpenCL via ROCm)
+### AMD (OpenCL via Mesa Rusticl)
 
-Requires the [ROCm OpenCL runtime](https://rocm.docs.amd.com/en/latest/deploy/linux/index.html) installed on the host. Mount the host's OpenCL vendor config and pass through the DRI and KFD devices. The user must be in the `render` and `video` groups.
+Use the `-amd` image, which bundles Mesa Rusticl OpenCL and enables the `radeonsi` driver. Pass through `/dev/dri` and ensure the user running the container is in the `render` group (`sudo usermod -aG render $USER`).
 
 ```bash
 docker run -d --name frigate \
     --device /dev/dri \
-    --device /dev/kfd \
-    -v /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro \
     -p 57001:57001 \
     -v /home/user/.frigate:/root/.frigate \
-    ghcr.io/remcoros/frigate-docker:latest
+    ghcr.io/remcoros/frigate-docker:latest-amd
 ```
 
 ## Licence

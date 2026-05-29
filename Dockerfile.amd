@@ -67,7 +67,7 @@ ENV NETWORK=mainnet
 ENV RUSTICL_ENABLE=radeonsi
 ENV OCL_ICD_VENDORS=/etc/OpenCL/rusticl-vendors
 
-EXPOSE 57001
+EXPOSE 50001 50002
 VOLUME /root/.frigate
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -14,13 +14,13 @@ docker build -t frigate:local .
 
 ## Running the container
 
-The Dockerfile exposes port `57001` (Frigate electrum port). Map it to a host port of your choice (use same port unless you have a conflict).
+The Dockerfile exposes ports `50001` (Electrum TCP) and `50002` (optional Electrum SSL). Map the TCP port to a host port of your choice (use the same port unless you have a conflict). If you enable Frigate's SSL listener in `config.toml`, also publish `50002`.
 
 Persistent data is stored in the container at `/root/.frigate` (declared as a volume). To persist across container recreations, mount a host directory.
 
 ```bash
 docker run -d --name frigate \
-    -p 57001:57001 \
+    -p 50001:50001 \
     -v /home/user/.frigate:/root/.frigate \
     ghcr.io/remcoros/frigate-docker:latest
 ```
@@ -31,7 +31,7 @@ This uses 'mainnet' by default. If you want to run on e.g. testnet 4, you can se
 
 ```bash
 docker run -d --name frigate \
-    -p 57001:57001 \
+    -p 50001:50001 \
     -v /home/user/.frigate:/root/.frigate \
     -e NETWORK=testnet4 \
     ghcr.io/remcoros/frigate-docker:latest
@@ -57,7 +57,7 @@ Use the default image. Requires NVIDIA driver 570.86.15+ and [nvidia-container-t
 ```bash
 docker run -d --name frigate \
     --gpus all \
-    -p 57001:57001 \
+    -p 50001:50001 \
     -v /home/user/.frigate:/root/.frigate \
     ghcr.io/remcoros/frigate-docker:latest
 ```
@@ -71,7 +71,7 @@ Pass through `/dev/dri` and ensure the user running the container is in the `ren
 ```bash
 docker run -d --name frigate \
     --device /dev/dri \
-    -p 57001:57001 \
+    -p 50001:50001 \
     -v /home/user/.frigate:/root/.frigate \
     ghcr.io/remcoros/frigate-docker:latest
 ```
@@ -83,7 +83,7 @@ Use the `-amd` image, which bundles Mesa Rusticl OpenCL and enables the `radeons
 ```bash
 docker run -d --name frigate \
     --device /dev/dri \
-    -p 57001:57001 \
+    -p 50001:50001 \
     -v /home/user/.frigate:/root/.frigate \
     ghcr.io/remcoros/frigate-docker:latest-amd
 ```

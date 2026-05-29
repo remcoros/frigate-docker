@@ -87,7 +87,7 @@ COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 ENV NETWORK=mainnet
 
-EXPOSE 57001
+EXPOSE 50001 50002
 VOLUME /root/.frigate
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

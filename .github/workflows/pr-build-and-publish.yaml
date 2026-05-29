@@ -2,8 +2,8 @@ name: PR Build Docker Image (Multi-Arch, no publish)
 
 on:
   pull_request:
-    paths-ignore: ["*.md"]
-    branches: ["main"]
+    paths-ignore: ['*.md']
+    branches: [main]
 
 permissions:
   contents: read
@@ -15,14 +15,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - variant: default
+            arch: amd64
             platform: linux/amd64
             dockerfile: Dockerfile
             runner: ubuntu-latest
-          - arch: arm64
+          - variant: default
+            arch: arm64
             platform: linux/arm64
             dockerfile: Dockerfile
             runner: ubuntu-24.04-arm
+          - variant: amd
+            arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile.amd
+            runner: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,15 +38,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build (no push) - ${{ matrix.arch }}
+      - name: Build (no push) - ${{ matrix.variant }}/${{ matrix.arch }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
-          # Reuse and populate BuildKit cache to speed up subsequent builds
-          cache-from: type=gha,scope=frigate-docker-${{ matrix.arch }}
-          cache-to: type=gha,scope=frigate-docker-${{ matrix.arch }},mode=max
+          cache-from: type=gha,scope=frigate-docker-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=frigate-docker-${{ matrix.variant }}-${{ matrix.arch }},mode=max
           provenance: false
           sbom: false
           push: false

@@ -57,6 +57,7 @@ RUN if [ "${TARGETPLATFORM}" = "linux/amd64" ] ; then \
   apt update && \
   apt install -y --no-install-recommends \
     ca-certificates \
+    clinfo \
     ocl-icd-libopencl1 \
     wget && \
   wget -q \

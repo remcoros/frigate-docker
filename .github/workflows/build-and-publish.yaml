@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
   push:
     paths-ignore: ['*.md']
-    branches: [main]
     tags: ['v*.*.*']
 
 permissions:
@@ -19,6 +18,7 @@ jobs:
   #   default  - generic + nvidia + intel; built for amd64 + arm64 from Dockerfile
   #              (Intel OpenCL runtime is included on amd64 only via if-check)
   #   amd      - AMD GPU (Mesa Rusticl OpenCL); built for amd64 only from Dockerfile.amd
+  #   rocm     - AMD GPU (ROCm OpenCL); built for amd64 only from Dockerfile.rocm
   # ---------------------------------------------------------------------------
   build:
     runs-on: ${{ matrix.runner }}
@@ -43,6 +43,12 @@ jobs:
             arch: amd64
             platform: linux/amd64
             dockerfile: Dockerfile.amd
+            runner: ubuntu-latest
+          # rocm variant - amd64 only
+          - variant: rocm
+            arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile.rocm
             runner: ubuntu-latest
 
     steps:
@@ -128,6 +134,10 @@ jobs:
         with:
           name: digest-amd-amd64
           path: digests/amd/amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-rocm-amd64
+          path: digests/rocm/amd64
 
       - name: Read digests
         id: digests
@@ -135,28 +145,7 @@ jobs:
           echo "default_amd64=$(cat digests/default/amd64/digest-default-amd64.txt)" >> "$GITHUB_OUTPUT"
           echo "default_arm64=$(cat digests/default/arm64/digest-default-arm64.txt)" >> "$GITHUB_OUTPUT"
           echo "amd_amd64=$(cat digests/amd/amd64/digest-amd-amd64.txt)" >> "$GITHUB_OUTPUT"
-
-      # ---- main branch -------------------------------------------------------
-      - name: Push manifests (main branch)
-        if: github.ref_type == 'branch' && github.ref == 'refs/heads/main'
-        run: |
-          set -euo pipefail
-          IMAGE="ghcr.io/${{ steps.vars.outputs.owner }}/frigate-docker"
-
-          # default variant
-          for TAG in main "${{ github.sha }}"; do
-            docker manifest create "$IMAGE:$TAG" \
-              --amend "$IMAGE@${{ steps.digests.outputs.default_amd64 }}" \
-              --amend "$IMAGE@${{ steps.digests.outputs.default_arm64 }}"
-            docker manifest push "$IMAGE:$TAG"
-          done
-
-          # amd variant
-          for TAG in main-amd "${{ github.sha }}-amd"; do
-            docker manifest create "$IMAGE:$TAG" \
-              --amend "$IMAGE@${{ steps.digests.outputs.amd_amd64 }}"
-            docker manifest push "$IMAGE:$TAG"
-          done
+          echo "rocm_amd64=$(cat digests/rocm/amd64/digest-rocm-amd64.txt)" >> "$GITHUB_OUTPUT"
 
       # ---- version tag -------------------------------------------------------
       - name: Push manifests (version tag)
@@ -178,5 +167,12 @@ jobs:
           for TAG in "$VER-amd" latest-amd; do
             docker manifest create "$IMAGE:$TAG" \
               --amend "$IMAGE@${{ steps.digests.outputs.amd_amd64 }}"
+            docker manifest push "$IMAGE:$TAG"
+          done
+
+          # rocm variant
+          for TAG in "$VER-rocm" latest-rocm; do
+            docker manifest create "$IMAGE:$TAG" \
+              --amend "$IMAGE@${{ steps.digests.outputs.rocm_amd64 }}"
             docker manifest push "$IMAGE:$TAG"
           done

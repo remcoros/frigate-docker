@@ -30,6 +30,11 @@ jobs:
             platform: linux/amd64
             dockerfile: Dockerfile.amd
             runner: ubuntu-latest
+          - variant: rocm
+            arch: amd64
+            platform: linux/amd64
+            dockerfile: Dockerfile.rocm
+            runner: ubuntu-latest
 
     steps:
       - name: Checkout

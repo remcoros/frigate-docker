@@ -5,7 +5,7 @@ ARG FRIGATE_VERSION=1.5.3
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 RUN if [ "${TARGETPLATFORM}" != "linux/amd64" ] ; then \
-    echo "Dockerfile.amd supports linux/amd64 only" >&2 ; \
+    echo "Dockerfile.rocm supports linux/amd64 only" >&2 ; \
     exit 1 ; \
   fi
 
@@ -22,39 +22,58 @@ RUN \
 RUN \
   ARCH="amd64" && \
   echo "**** install Frigate ****" && \
-  # Download and install Frigate
   wget https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate_${FRIGATE_VERSION}_${ARCH}.deb \
        https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt \
        https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate-${FRIGATE_VERSION}-manifest.txt.asc \
        https://keybase.io/craigraw/pgp_keys.asc && \
-  # verify pgp and sha signatures
   gpg --import pgp_keys.asc && \
   gpg --status-fd 1 --verify frigate-${FRIGATE_VERSION}-manifest.txt.asc | grep -q "GOODSIG ${FRIGATE_PGP_SIG} Craig Raw <craig@sparrowwallet.com>" || exit 1 && \
   sha256sum --check frigate-${FRIGATE_VERSION}-manifest.txt --ignore-missing || exit 1 && \
   DEBIAN_FRONTEND=noninteractive \
   apt-get install -y ./frigate_${FRIGATE_VERSION}_${ARCH}.deb && \
-  # cleanup
   rm ./frigate* ./pgp_keys.asc
 
 FROM debian:trixie-slim
 
-# AMD GPU variant - Mesa Rusticl OpenCL runtime baked into the image
-# (x86_64 only).
+# AMD GPU variant - ROCm 7.2.4 OpenCL runtime (x86_64 only).
 #
-# Uses Mesa's Rusticl OpenCL implementation with the radeonsi Gallium driver.
-# This avoids AMD's narrow ROCm support matrix and upstream apt repo issues,
-# while keeping the stable -amd tag.
+# Base: debian:trixie-slim. ROCm packages are installed from the Ubuntu noble
+# apt repo — AMD's officially documented approach for Debian 13 (trixie).
+# See: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html
+#
+# Requires /dev/kfd and /dev/dri/renderD128 passed through at runtime:
+#   --device /dev/kfd --device /dev/dri/renderD128
+#
+# The container runs as root; no render/video group setup needed.
+#
+# Officially supported GPUs: discrete RDNA2/RDNA3/RDNA4 (RX 6000/7000/9000),
+# select Radeon PRO, and AMD Instinct. NOT supported: integrated APUs
+# (Radeon 780M / 760M, gfx1103/gfx1102) — use the -amd (Rusticl) image instead.
+#
+# To verify GPU detection:
+#   docker run --rm --device /dev/kfd --device /dev/dri/renderD128 \
+#     --entrypoint clinfo <image>
+
+ARG ROCM_VERSION=7.2.4
 
 RUN apt update && \
   apt install -y --no-install-recommends \
     ca-certificates \
-    clinfo \
-    mesa-opencl-icd \
+    curl \
+    gnupg && \
+  # Add AMD ROCm apt repository
+  mkdir -p /etc/apt/keyrings && \
+  curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key \
+    | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg && \
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} noble main" \
+    > /etc/apt/sources.list.d/rocm.list && \
+  apt update && \
+  apt install -y --no-install-recommends \
     ocl-icd-libopencl1 \
-  && \
-  test -e /etc/OpenCL/vendors/rusticl.icd && \
-  mkdir -p /etc/OpenCL/rusticl-vendors && \
-  ln -s /etc/OpenCL/vendors/rusticl.icd /etc/OpenCL/rusticl-vendors/rusticl.icd && \
+    rocm-opencl-runtime \
+    clinfo && \
+  apt-get remove -y curl gnupg && \
+  apt-get autoremove -y && \
   apt-get autoclean && \
   rm -rf \
     /var/lib/apt/lists/* \
@@ -65,8 +84,6 @@ COPY --from=frigate /opt/frigate /opt/frigate
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 ENV NETWORK=mainnet
-ENV RUSTICL_ENABLE=radeonsi
-ENV OCL_ICD_VENDORS=/etc/OpenCL/rusticl-vendors
 
 EXPOSE 50001 50002
 VOLUME /root/.frigate

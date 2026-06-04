@@ -18,7 +18,7 @@ jobs:
   #   default  - generic + nvidia + intel; built for amd64 + arm64 from Dockerfile
   #              (Intel OpenCL runtime is included on amd64 only via if-check)
   #   amd      - AMD GPU (Mesa Rusticl OpenCL); built for amd64 only from Dockerfile.amd
-  #   rocm     - AMD GPU (ROCm OpenCL); built for amd64 only from Dockerfile.rocm
+  #   rocm     - AMD GPU (ROCm OpenCL, TheRock nightly); built for amd64 only from Dockerfile.rocm
   # ---------------------------------------------------------------------------
   build:
     runs-on: ${{ matrix.runner }}
@@ -44,7 +44,7 @@ jobs:
             platform: linux/amd64
             dockerfile: Dockerfile.amd
             runner: ubuntu-latest
-          # rocm variant - amd64 only
+          # rocm variant - amd64 only (TheRock nightly, AMD OpenCL)
           - variant: rocm
             arch: amd64
             platform: linux/amd64
@@ -96,13 +96,10 @@ jobs:
   # ---------------------------------------------------------------------------
   # Assemble multi-arch manifests from per-arch digests and push final tags.
   #
-  # Tags produced on main branch push:
-  #   :main, :{sha}                          (default variant)
-  #   :main-amd, :{sha}-amd                  (amd variant)
-  #
   # Tags produced on version tag (v*.*.*):
   #   :{version}, :latest                    (default variant)
   #   :{version}-amd, :latest-amd            (amd variant)
+  #   :{version}-rocm, :latest-rocm          (rocm variant)
   # ---------------------------------------------------------------------------
   manifest:
     runs-on: ubuntu-latest

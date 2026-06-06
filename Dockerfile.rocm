@@ -32,6 +32,10 @@ RUN apt-get update && \
   sha256sum --check frigate-${FRIGATE_VERSION}-manifest.txt --ignore-missing || exit 1 && \
   DEBIAN_FRONTEND=noninteractive \
   apt-get install -y ./frigate_${FRIGATE_VERSION}_${ARCH}.deb && \
+  # Register ROCm OpenCL ICD so the ocl-icd loader can find libamdocl64
+  mkdir -p /etc/OpenCL/vendors && \
+  find /opt/rocm -name 'libamdocl64.so' -not -name '*.so.*' | head -1 \
+    | xargs -I{} sh -c 'echo "{}" > /etc/OpenCL/vendors/amdocl64.icd' && \
   # Cleanup
   apt-get remove -y gnupg wget && \
   apt-get autoremove -y && \

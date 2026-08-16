@@ -8,12 +8,12 @@ ARG FRIGATE_VERSION=1.5.3
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 # TheRock nightly release ID. Update periodically to pick up fixes.
-# Browse available releases at: https://rocm.nightlies.amd.com/deb/
-ARG THEROCK_RELEASE_ID=20260604-26928285906
+# Browse available releases at: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
+ARG THEROCK_RELEASE_ID=20260816-31916229674
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates && \
-  echo "deb [trusted=yes] https://rocm.nightlies.amd.com/deb/${THEROCK_RELEASE_ID} stable main" \
+  echo "deb [trusted=yes] https://rocm.nightlies.amd.com/packages-multi-arch/deb/${THEROCK_RELEASE_ID} stable main" \
     > /etc/apt/sources.list.d/rocm-therock-nightly.list && \
   apt-get update && \
   apt-get install -y --no-install-recommends \

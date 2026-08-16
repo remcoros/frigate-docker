@@ -15,11 +15,11 @@ RUN \
 
 # Install frigate
 RUN \
-  if [ "${TARGETPLATFORM}" = "linux/arm64" ] ; then \
-    ARCH="arm64" ; \
-  else \
-    ARCH="amd64" ; \
-  fi && \
+  case "${TARGETPLATFORM}" in \
+    "linux/amd64") ARCH="amd64" ;; \
+    "linux/arm64") ARCH="arm64" ;; \
+    *) echo "Unsupported target platform: ${TARGETPLATFORM}" >&2; exit 1 ;; \
+  esac && \
   echo "**** install Frigate ****" && \
   # Download and install Frigate
   wget https://github.com/sparrowwallet/frigate/releases/download/${FRIGATE_VERSION}/frigate_${FRIGATE_VERSION}_${ARCH}.deb \
@@ -46,13 +46,17 @@ FROM debian:trixie-slim
 #   the NVIDIA container runtime injects driver libraries at launch time.
 # - AMD: use the separate Dockerfile.amd image with Mesa Rusticl/radeonsi.
 ARG TARGETPLATFORM
-ARG INTEL_COMPUTE_RUNTIME_VERSION=26.18.38308.1
-ARG INTEL_IGC_VERSION=2.34.4+21428
-ARG INTEL_IGC_VERSION_SHORT=2.34.4
+ARG INTEL_COMPUTE_RUNTIME_VERSION=26.27.39122.11
+ARG INTEL_IGC_VERSION=2.38.2+22051
+ARG INTEL_IGC_VERSION_SHORT=2.38.2
+ARG INTEL_IGC_CORE_SHA256=3dbcbe4e716d62e9bd43a4a476d724cf772b4581dbcdd096d70df382e7ccad7e
+ARG INTEL_IGC_OPENCL_SHA256=e265d191590efd5491bfbbd148c144fdd40aea51e0b57f8651130d2da20b8186
+ARG INTEL_GMMLIB_SHA256=6031a63d6e8a12ce61c14efc15f2c8e727061286e3820b8594e6d00615e04d54
+ARG INTEL_OPENCL_SHA256=6e447a783c99fb5634df298c135a81165be07db98672df96cdf413d22f3e6ac4
 
 # Intel OpenCL runtime is installed on x86_64 only.
-# A single compute-runtime package covers both i915 (Gen12 and older) and
-# xe (Arc/Xe, Meteor Lake+, kernel >= 6.8) - no separate image needed per driver.
+# The pinned compute-runtime release supports platforms using both the i915 and
+# xe kernel drivers, so no separate image is needed per driver.
 RUN if [ "${TARGETPLATFORM}" = "linux/amd64" ] ; then \
   apt update && \
   apt install -y --no-install-recommends \
@@ -65,6 +69,12 @@ RUN if [ "${TARGETPLATFORM}" = "linux/amd64" ] ; then \
     "https://github.com/intel/intel-graphics-compiler/releases/download/v${INTEL_IGC_VERSION_SHORT}/intel-igc-opencl-2_${INTEL_IGC_VERSION}_amd64.deb" \
     "https://github.com/intel/compute-runtime/releases/download/${INTEL_COMPUTE_RUNTIME_VERSION}/libigdgmm12_22.10.0_amd64.deb" \
     "https://github.com/intel/compute-runtime/releases/download/${INTEL_COMPUTE_RUNTIME_VERSION}/intel-opencl-icd_${INTEL_COMPUTE_RUNTIME_VERSION}-0_amd64.deb" && \
+  printf '%s  %s\n' \
+    "${INTEL_IGC_CORE_SHA256}" "intel-igc-core-2_${INTEL_IGC_VERSION}_amd64.deb" \
+    "${INTEL_IGC_OPENCL_SHA256}" "intel-igc-opencl-2_${INTEL_IGC_VERSION}_amd64.deb" \
+    "${INTEL_GMMLIB_SHA256}" "libigdgmm12_22.10.0_amd64.deb" \
+    "${INTEL_OPENCL_SHA256}" "intel-opencl-icd_${INTEL_COMPUTE_RUNTIME_VERSION}-0_amd64.deb" \
+    | sha256sum --check --strict - && \
   dpkg -i \
     intel-igc-core-2_${INTEL_IGC_VERSION}_amd64.deb \
     intel-igc-opencl-2_${INTEL_IGC_VERSION}_amd64.deb \

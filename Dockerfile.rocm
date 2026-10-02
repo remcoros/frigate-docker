@@ -4,12 +4,12 @@ FROM debian:trixie-slim
 # Uses amdrocm-opencl: ROCm OpenCL runtime + LLVM JIT compiler, supports all AMD GPU families.
 # Requires /dev/kfd and /dev/dri/renderD128 at runtime.
 
-ARG FRIGATE_VERSION=1.5.3
+ARG FRIGATE_VERSION=1.6.0
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 # TheRock nightly release ID. Update periodically to pick up fixes.
 # Browse available releases at: https://rocm.nightlies.amd.com/packages-multi-arch/deb/
-ARG THEROCK_RELEASE_ID=20260816-31916229674
+ARG THEROCK_RELEASE_ID=20260822-32539019050
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates && \

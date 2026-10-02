@@ -8,6 +8,8 @@ services:
   frigate:
     image: ghcr.io/remcoros/frigate-docker:latest
     restart: unless-stopped
+    # Frigate 1.6.0 drains in-flight requests for up to 10 seconds on SIGTERM.
+    stop_grace_period: 15s
     ports:
       - "50001:50001"
     volumes:
@@ -21,6 +23,7 @@ services:
   frigate-nvidia:
     image: ghcr.io/remcoros/frigate-docker:latest
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - "50001:50001"
     volumes:
@@ -42,6 +45,7 @@ services:
   frigate-intel:
     image: ghcr.io/remcoros/frigate-docker:latest
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - "50001:50001"
     volumes:
@@ -57,6 +61,7 @@ services:
   frigate-amd:
     image: ghcr.io/remcoros/frigate-docker:latest-amd
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - "50001:50001"
     volumes:

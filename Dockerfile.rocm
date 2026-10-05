@@ -4,7 +4,7 @@ FROM debian:trixie-slim
 # Uses amdrocm-opencl: ROCm OpenCL runtime + LLVM JIT compiler, supports all AMD GPU families.
 # Requires /dev/kfd and /dev/dri/renderD128 at runtime.
 
-ARG FRIGATE_VERSION=1.6.0
+ARG FRIGATE_VERSION=1.6.1
 ARG FRIGATE_PGP_SIG=E94618334C674B40
 
 # TheRock nightly release ID. Update periodically to pick up fixes.
